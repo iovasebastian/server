@@ -5,7 +5,8 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-app.use(cors( { origin: 'iovasebastian.github.io/quizlet-app'}));
+app.use(cors({ origin: 'https://iovasebastian.github.io/quizlet-app' }));
+app.use(cors({ origin: 'https://iovasebastian.github.io/' }));
 app.use('*',cors());
 app.use(express.json());
 
