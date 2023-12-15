@@ -18,7 +18,7 @@ app.use(express.json());
 // Connect to MongoDB Atlas
 
 // Connect to MongoDB using the loaded connection string
-mongoose.connect('mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/your-database-name', {
+mongoose.connect('mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/?retryWrites=true&w=majority', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
