@@ -5,7 +5,8 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-app.use(cors( { origin: 'https://iovasebastian.github.io/'}));
+app.use(cors( { origin: '*'}));
+app.use('*',cors());
 app.use(express.json());
 
 // Connect to MongoDB Atlas
