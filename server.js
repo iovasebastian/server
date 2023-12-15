@@ -11,22 +11,14 @@ app.use(express.json());
 // Connect to MongoDB Atlas
 
 // Connect to MongoDB using the loaded connection string
-mongoose.connect("mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/?retryWrites=true&w=majority", {
-  useNewUrlParser: connectionData.useNewUrlParser,
-  useUnifiedTopology: connectionData.useUnifiedTopology
-})
-  .then(() => {
-    console.log('MongoDB connected successfully');
-  })
-  .catch((error) => {
-    console.error('Error connecting to MongoDB:', error);
-  });
+mongoose.connect("mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/?retryWrites=true&w=majority")
 
 
-  const ItemSchema = new mongoose.Schema({
-    question: String,
-    answer: String,
-  });
+
+const ItemSchema = new mongoose.Schema({
+  question: String,
+  answer: String,
+});
 const Item = mongoose.model('Item', ItemSchema);
 
 app.post('/api/items', async (req, res) => {
