@@ -9,16 +9,9 @@ app.use(cors());
 app.use(express.json());
 
 // Connect to MongoDB Atlas
-const fs = require('fs');
-
-// Read the connection string from the file
-const connectionString = fs.readFileSync('./connection.json', 'utf8');
-
-// Parse the connection string as JSON
-const connectionData = JSON.parse(connectionString);
 
 // Connect to MongoDB using the loaded connection string
-mongoose.connect(connectionData.host, {
+mongoose.connect("mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/?retryWrites=true&w=majority", {
   useNewUrlParser: connectionData.useNewUrlParser,
   useUnifiedTopology: connectionData.useUnifiedTopology
 })
