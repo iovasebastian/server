@@ -7,8 +7,8 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-app.use(cors({ origin: 'https://iovasebastian.github.io/quizlet-app' }));
-app.use(cors({ origin: 'https://iovasebastian.github.io/' }));
+app.use(cors({ origin: '*' }));
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -31,7 +31,7 @@ const ItemSchema = new mongoose.Schema({
 });
 const Item = mongoose.model('Item', ItemSchema);
 
-app.post('/api/items', async (req, res) => {
+app.post('/items', async (req, res) => {
   try {
     const newItem = new Item(req.body);
     await newItem.save();
@@ -40,8 +40,13 @@ app.post('/api/items', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+router.get('/test',(req,res) =>{
+  res.json({
+    'hello':'hi'
+  })
+});
 
-app.get('/api/items', async (req, res) => {
+app.get('/items', async (req, res) => {
     try {
       const allItems = await Item.find();
       res.status(200).json(allItems);
@@ -50,7 +55,7 @@ app.get('/api/items', async (req, res) => {
     }
   });
 
-app.delete('/api/items', async (req, res) => {
+app.delete('/items', async (req, res) => {
     try {
       await Item.deleteMany({});
       res.status(200).json({ message: 'All entries deleted successfully.' });
@@ -60,8 +65,7 @@ app.delete('/api/items', async (req, res) => {
     }
   });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
-app.use('/.netlify/functions/server.js', router);
+
+app.use('/.netlify/functions/server', router);
 module.exports.handler = serverless(app);
+
