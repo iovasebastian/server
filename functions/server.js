@@ -1,6 +1,8 @@
 // server.js
 const express = require('express');
+const router = express.Router();
 const mongoose = require('mongoose');
+const serverless = require('serverless-http')
 const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -61,3 +63,5 @@ app.delete('/api/items', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
+app.use('/.netlify/functions/server', router);
+module.exports.handler = serverless(app);
