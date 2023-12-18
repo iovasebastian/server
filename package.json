@@ -15,9 +15,6 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "mongodb": "^6.3.0",
-    "mongoose": "^8.0.3",
-    "netlify-cli": "^17.10.1",
-    "netlify-lambda": "^2.0.16",
-    "serverless-http": "^3.2.0"
+    "mongoose": "^8.0.3"
   }
 }
