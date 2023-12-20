@@ -55,22 +55,18 @@ app.post('/api/items', async (req, res) => {
   }
 });
 
-app.delete('/api/items/:id', async (req, res) => {
-  const itemId = req.params.id;
-
+app.delete('/api/items', async (req, res) => {
   try {
-    const deletedItem = await Item.findByIdAndDelete(itemId);
-
-    if (!deletedItem) {
-      return res.status(404).json({ message: 'Item not found.' });
-    }
-
-    res.status(200).json({ message: 'Item deleted successfully.' });
+    await Item.deleteMany();
+    res.status(200).json({ message: 'Items deleted successfully' });
   } catch (error) {
-    console.error('Error deleting item:', error);
+    console.error(error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
+
 const PORT = process.env.PORT || 3000; // Use the provided port or default to 3000
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
