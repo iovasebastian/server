@@ -55,12 +55,19 @@ app.post('/api/items', async (req, res) => {
   }
 });
 
-app.delete('/api/items', async (req, res) => {
+app.delete('/api/items/:id', async (req, res) => {
+  const itemId = req.params.id;
+
   try {
-    await Item.deleteMany({});
-    res.status(200).json({ message: 'All entries deleted successfully.' });
+    const deletedItem = await Item.findByIdAndDelete(itemId);
+
+    if (!deletedItem) {
+      return res.status(404).json({ message: 'Item not found.' });
+    }
+
+    res.status(200).json({ message: 'Item deleted successfully.' });
   } catch (error) {
-    console.error('Error deleting entries:', error);
+    console.error('Error deleting item:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
