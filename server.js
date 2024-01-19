@@ -121,35 +121,6 @@ app.delete('/api/items/admin/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/items/deleteQuestionSet/:userId/:questionSetId', async (req, res) => {
-  try {
-    const { userId, questionSetId } = req.params;
-
-    const user = await Item.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Find the index of the question set to delete
-    const questionSetIndex = user.questionSets.findIndex(qs => qs._id.toString() === questionSetId);
-
-    if (questionSetIndex === -1) {
-      return res.status(404).json({ error: 'Question set not found' });
-    }
-
-    // Remove the question set from the array
-    user.questionSets.splice(questionSetIndex, 1);
-
-    // Save the updated user with the removed question set
-    await user.save();
-
-    res.json({ message: 'Question set deleted successfully' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
 
 
 
