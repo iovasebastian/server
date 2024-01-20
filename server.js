@@ -120,6 +120,10 @@ app.delete('/api/items/admin/:id', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
+
+
 app.post('/api/items/signup', async (req, res) => {
   const { username, password } = req.body;
   try {
