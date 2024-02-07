@@ -1,6 +1,6 @@
 {
     "version": 2,
-    "name": "server",
+    "name": "server-quizlet",
     "builds":[
         {
             "src": "server.js",
