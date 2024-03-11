@@ -45,6 +45,9 @@ app.get('/api/items/getUser', async (req,res) => {
     res.status(500).json({error: 'Failed to get users from db'});
   }
 })
+/**
+ * Comment
+ */
 app.get('/api/items', async (req, res) => {
   try {
 
