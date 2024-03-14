@@ -11,7 +11,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-mongoose.connect(process.env.MONGO_URI, { 
+mongoose.connect("mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/Quizlet", { 
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
@@ -26,14 +26,18 @@ const QuestionSetSchema = new mongoose.Schema({
   questions: [String],
   answers: [String]
 });
+const allSetsSchema = new mongoose.Schema({
+  title: String,
+  allQuestionSets : [QuestionSetSchema]
+})
 
 const ItemSchema = new mongoose.Schema({
   username: String,
   password: String,
   role: String,
-  questionSets: [QuestionSetSchema]
+  questionSets: [allSetsSchema]
 });
-const Item = mongoose.model('Item', ItemSchema);
+const Item = mongoose.model('Item', ItemSchema, 'test');
 
 app.get('/api/items/getUser', async (req,res) => {
   try{
@@ -45,9 +49,6 @@ app.get('/api/items/getUser', async (req,res) => {
     res.status(500).json({error: 'Failed to get users from db'});
   }
 })
-/**
- * Comment
- */
 app.get('/api/items', async (req, res) => {
   try {
 
@@ -61,39 +62,70 @@ app.get('/api/items', async (req, res) => {
     res.status(500).json({ error: 'Error getting items from db' });
   }
 });
-
-app.post('/api/items/saveForUser', async (req, res) => {
-  const { items } = req.body;
+app.post('/api/items/deleteQuestionSet', async (req, res) => {
+  const { username, title } = req.body; // Assuming you send the title of the question set to be deleted
 
   try {
-    console.log('Received items:', items);
-
-    const user = items[0].username;
-    console.log('Username:', user);
-    console.log(items[0].questionSets);
-
-    // Check if the user exists
-    const existingUser = await Item.findOne({ username: user });
-
-    if (existingUser) {
-      // Update the existing user with the new questionSets
-      await Item.updateOne({ username: user }, { $set: { questionSets: items[0].questionSets } });
-
-      console.log('Items updated for the user.');
-      res.status(201).json({ message: 'Items saved for the user.' });
+    const user = await Item.findOne({ username: username });
+    if (user) {
+      user.questionSets = user.questionSets.filter(qs => qs.title !== title);
+      await user.save();
+      res.status(200).send('Question set deleted successfully');
     } else {
-      // If the user doesn't exist, create a new one with the provided questionSets
-      await Item.create({ username: user, questionSets: items[0].questionSets });
-
-      console.log('New user created with items.');
-      res.status(201).json({ message: 'New user created with items.' });
+      res.status(404).send('User not found');
     }
-
   } catch (error) {
-    console.error('Error in saveForUser:', error);
-    res.status(500).json({ error: 'Error saving items for the user.' });
+    res.status(500).send('Error deleting question set');
   }
 });
+app.post('/api/items/question-set', async (req, res) => {
+  const { username, title } = req.body;
+
+  try {
+    const user = await Item.findOne({ username: username });
+    if (!user) {
+      return res.status(404).send('User not found');
+    }
+
+    // Add the empty question set
+    user.questionSets.push({ title: title, allQuestionSets: [] });
+    await user.save();
+
+    res.status(200).send('Empty question set added successfully');
+  } catch (error) {
+    res.status(500).send('An error occurred');
+  }
+});
+app.post('/api/items/saveForUser', async (req, res) => {
+  const { inputData, questionSetTitle,user } = req.body;
+   // Make sure the user is already set in the request, e.g., from a middleware
+
+  if (!user) {
+    return res.status(404).send('User not found.');
+  }
+
+  try {
+    // Find the user document
+    const userItem = await Item.findOne({ username: user.username });
+
+    if (!userItem) {
+      return res.status(404).send('User item not found.');
+    }
+
+    // Update the allQuestionSets for the specified title
+    const questionSetIndex = userItem.questionSets.findIndex(qs => qs.title === questionSetTitle);
+    userItem.questionSets[questionSetIndex].allQuestionSets = inputData;
+
+
+    await userItem.save();
+
+    res.status(200).send('Data has been saved');
+  } catch (error) {
+    console.error('Error saving data:', error);
+    res.status(500).send('Error saving data');
+  }
+});
+
 
 app.post('/api/items/signin', async (req, res) => {
   const { username, password } = req.body;
