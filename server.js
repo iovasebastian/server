@@ -38,6 +38,7 @@ const ItemSchema = new mongoose.Schema({
   questionSets: [allSetsSchema]
 });
 const Item = mongoose.model('Item', ItemSchema, 'test');
+const Questions = mongoose.model('Questions', allSetsSchema);
 
 app.get('/api/items/getUser', async (req,res) => {
   try{
@@ -63,13 +64,13 @@ app.get('/api/items', async (req, res) => {
   }
 });
 app.post('/api/items/deleteQuestionSet', async (req, res) => {
-  const { username, _id } = req.body; // Assuming you send the title of the question set to be deleted
+  const {_id } = req.body; // Assuming you send the title of the question set to be deleted
 
   try {
     const user = await Item.findByIdAndDelete(_id);
     
     if (user) {
-      res.json(deletedUser);
+      res.json(user);
     } else {
       res.status(404).send('User not found');
     }
@@ -81,7 +82,7 @@ app.post('/api/items/question-set', async (req, res) => {
   const { username, title } = req.body;
 
   try {
-    const user = await Item.findOne({ username: username });
+    const user = await Questions.findOne({ username: username });
     if (!user) {
       return res.status(404).send('User not found');
     }
