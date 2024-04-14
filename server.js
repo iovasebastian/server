@@ -92,7 +92,7 @@ app.post('/api/items/question-set', async (req, res) => {
   const { username, title } = req.body;
 
   try {
-    const user = await Questions.findOne({ username: username });
+    const user = await Item.findOne({ username: username });
     if (!user) {
       return res.status(404).send('User not found');
     }
