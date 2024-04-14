@@ -67,7 +67,7 @@ app.post('/api/items/deleteQuestionSet', async (req, res) => {
   const {_id } = req.body;
 
   try {
-    const result = await User.updateOne(
+    const result = await Item.updateOne(
       { username: username },
       { $pull: { 'questionSets': { 'allQuestionSets._id': _id } } }
     );
