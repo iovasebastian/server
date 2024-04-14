@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const app = express();
+const ObjectId = require('mongoose').Types.ObjectId;
 require('dotenv').config();
 
 app.use(cors({
@@ -64,20 +65,28 @@ app.get('/api/items', async (req, res) => {
   }
 });
 app.post('/api/items/deleteQuestionSet', async (req, res) => {
-  const {_id } = req.body;
+  const { _id } = req.body;
 
   try {
+    // Make sure _id is an ObjectId
+    const questionSetId = new ObjectId(_id);
+
+    // Attempt to pull the question set from the questionSets array
     const result = await Item.updateOne(
-      { username: username },
-      { $pull: { 'questionSets': { 'allQuestionSets._id': _id } } }
+      // Find the user document that contains the question set
+      { 'questionSets._id': questionSetId },
+      // Pull the question set from the array
+      { $pull: { questionSets: { _id: questionSetId } } }
     );
+
     if (result.modifiedCount === 0) {
-      return res.status(404).send('Question set not found or user not found');
+      return res.status(404).send('Question set not found');
     }
 
     res.send('Question set deleted successfully');
   } catch (error) {
-    res.status(500).send('Error deleting question set');
+    console.log(error); // Log the full error
+    res.status(500).send('Error deleting question set: ' + error.message);
   }
 });
 app.post('/api/items/question-set', async (req, res) => {
