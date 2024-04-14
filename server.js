@@ -64,16 +64,18 @@ app.get('/api/items', async (req, res) => {
   }
 });
 app.post('/api/items/deleteQuestionSet', async (req, res) => {
-  const {_id } = req.body; // Assuming you send the title of the question set to be deleted
+  const {_id } = req.body;
 
   try {
-    const user = await Item.findByIdAndDelete(_id);
-    
-    if (user) {
-      res.json(user);
-    } else {
-      res.status(404).send('User not found');
+    const result = await User.updateOne(
+      { username: username },
+      { $pull: { 'questionSets': { 'allQuestionSets._id': questionSetId } } }
+    );
+    if (result.modifiedCount === 0) {
+      return res.status(404).send('Question set not found or user not found');
     }
+
+    res.send('Question set deleted successfully');
   } catch (error) {
     res.status(500).send('Error deleting question set');
   }
