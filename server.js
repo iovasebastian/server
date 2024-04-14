@@ -69,7 +69,7 @@ app.post('/api/items/deleteQuestionSet', async (req, res) => {
   try {
     const result = await User.updateOne(
       { username: username },
-      { $pull: { 'questionSets': { 'allQuestionSets._id': questionSetId } } }
+      { $pull: { 'questionSets': { 'allQuestionSets._id': _id } } }
     );
     if (result.modifiedCount === 0) {
       return res.status(404).send('Question set not found or user not found');
