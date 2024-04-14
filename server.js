@@ -39,7 +39,6 @@ const ItemSchema = new mongoose.Schema({
   questionSets: [allSetsSchema]
 });
 const Item = mongoose.model('Item', ItemSchema, 'test');
-const Questions = mongoose.model('Questions', allSetsSchema);
 
 app.get('/api/items/getUser', async (req,res) => {
   try{
