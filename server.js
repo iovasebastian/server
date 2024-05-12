@@ -11,6 +11,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use(express.bodyParser({limit: '1mb'}));
 
 mongoose.connect("mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/Quizlet", { 
   useNewUrlParser: true,
