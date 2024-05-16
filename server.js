@@ -39,12 +39,12 @@ const ItemSchema = new mongoose.Schema({
   questionSets: [allSetsSchema]
 });
 const Item = mongoose.model('Item', ItemSchema, 'test');
+const QuestionSets = mongoose.model('QuestionSets', QuestionSetSchema, 'test');
 
 app.get('/api/items/getUser', async (req,res) => {
   try{
     const users = await Item.find();
     res.status(200).json(users);
-    console.log(users);
   }catch(error){
     console.error(error);
     res.status(500).json({error: 'Failed to get users from db'});
@@ -108,7 +108,6 @@ app.post('/api/items/question-set', async (req, res) => {
 });
 app.post('/api/items/saveForUser', async (req, res) => {
   const { inputData, questionSetTitle,user } = req.body;
-   // Make sure the user is already set in the request, e.g., from a middleware
 
   if (!user) {
     return res.status(404).send('User not found.');
@@ -153,6 +152,48 @@ app.post('/api/items/signin', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+app.post('/api/items/saveEdit', async (req, res) => {
+  const {_id, item, questionSetId, allQuestionId, state } = req.body;
+  const objectId = new ObjectId(_id);
+  const mainDocId = new mongoose.Types.ObjectId(_id);  // The ID of the main document
+  const questionSetIdd = new mongoose.Types.ObjectId(allQuestionId); // The ID of the question set
+  const allQuestionSetId = new mongoose.Types.ObjectId(questionSetId); // The ID of the specific allQuestionSet
+
+  let result;
+  try {
+    
+    if(!state){
+      const result = await Item.updateOne(
+        { "_id": mainDocId },
+        { $set: { "questionSets.$[qs].allQuestionSets.$[aqs].questions": item } },
+        {
+          arrayFilters: [
+            { "qs._id": questionSetIdd },
+            { "aqs._id": allQuestionSetId }
+          ]
+        }
+      );
+    }else{
+      const result = await Item.updateOne(
+        { "_id": mainDocId },
+        { $set: { "questionSets.$[qs].allQuestionSets.$[aqs].answers": item } },
+        {
+          arrayFilters: [
+            { "qs._id": questionSetIdd },
+            { "aqs._id": allQuestionSetId }
+          ]
+        }
+      );
+    }
+    
+    res.status(200).send({ message: 'all good' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: 'An error occurred during the database operation', error: error.message });
+  }
+});
+
 app.delete('/api/items/admin/:id', async (req, res) => {
   try {
     const deletedUser = await Item.findByIdAndDelete(req.params.id);
