@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -12,7 +11,7 @@ app.use(cors({
 }));
 app.use(express.json({limit: '1mb'}));
 
-mongoose.connect("mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/Quizlet", { 
+mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://iovasebastian8:Sebica2003@project.y36dsll.mongodb.net/Quizlet", { 
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
@@ -27,10 +26,11 @@ const QuestionSetSchema = new mongoose.Schema({
   questions: [String],
   answers: [String]
 });
+
 const allSetsSchema = new mongoose.Schema({
   title: String,
-  allQuestionSets : [QuestionSetSchema]
-})
+  allQuestionSets: [QuestionSetSchema]
+});
 
 const ItemSchema = new mongoose.Schema({
   username: String,
@@ -38,43 +38,40 @@ const ItemSchema = new mongoose.Schema({
   role: String,
   questionSets: [allSetsSchema]
 });
+
 const Item = mongoose.model('Item', ItemSchema, 'test');
 const QuestionSets = mongoose.model('QuestionSets', QuestionSetSchema, 'test');
 
-app.get('/api/items/getUser', async (req,res) => {
-  try{
+app.get('/api/items/getUser', async (req, res) => {
+  try {
     const users = await Item.find();
     res.status(200).json(users);
-  }catch(error){
+  } catch (error) {
     console.error(error);
-    res.status(500).json({error: 'Failed to get users from db'});
+    res.status(500).json({ error: 'Failed to get users from db' });
   }
-})
+});
+
 app.get('/api/items', async (req, res) => {
   try {
-
     const { username } = req.query;
     const userItems = await Item.find({ username });
     const questions = userItems.map(item => item.questionSets).flat();
-
     res.status(200).json(questions);
     console.log(questions);
   } catch (error) {
     res.status(500).json({ error: 'Error getting items from db' });
   }
 });
+
 app.post('/api/items/deleteQuestionSet', async (req, res) => {
   const { _id } = req.body;
 
   try {
-    // Make sure _id is an ObjectId
     const questionSetId = new ObjectId(_id);
 
-    // Attempt to pull the question set from the questionSets array
     const result = await Item.updateOne(
-      // Find the user document that contains the question set
       { 'questionSets._id': questionSetId },
-      // Pull the question set from the array
       { $pull: { questionSets: { _id: questionSetId } } }
     );
 
@@ -84,10 +81,11 @@ app.post('/api/items/deleteQuestionSet', async (req, res) => {
 
     res.send('Question set deleted successfully');
   } catch (error) {
-    console.log(error); // Log the full error
+    console.log(error);
     res.status(500).send('Error deleting question set: ' + error.message);
   }
 });
+
 app.post('/api/items/question-set', async (req, res) => {
   const { username, title } = req.body;
 
@@ -97,7 +95,6 @@ app.post('/api/items/question-set', async (req, res) => {
       return res.status(404).send('User not found');
     }
 
-    // Add the empty question set
     user.questionSets.push({ title: title, allQuestionSets: [] });
     await user.save();
 
@@ -106,25 +103,38 @@ app.post('/api/items/question-set', async (req, res) => {
     res.status(500).send('An error occurred');
   }
 });
+
 app.post('/api/items/saveForUser', async (req, res) => {
-  const { inputData, questionSetTitle,user } = req.body;
+  const { inputData, questionSetTitle, user } = req.body;
 
   if (!user) {
     return res.status(404).send('User not found.');
   }
 
   try {
-    // Find the user document
+    // Găsește utilizatorul
     const userItem = await Item.findOne({ username: user.username });
 
     if (!userItem) {
       return res.status(404).send('User item not found.');
     }
 
-    // Update the allQuestionSets for the specified title
+    // Găsește indexul setului de întrebări
     const questionSetIndex = userItem.questionSets.findIndex(qs => qs.title === questionSetTitle);
-    userItem.questionSets[questionSetIndex].allQuestionSets = inputData;
 
+    // Verifică dacă setul de întrebări există
+    if (questionSetIndex === -1) {
+      return res.status(404).send('Question set not found.');
+    }
+
+    // Convertim `_id`-urile la `ObjectId`
+    const updatedInputData = inputData.map(item => ({
+      ...item,
+      _id: ObjectId.isValid(item._id) ? new ObjectId(item._id) : new ObjectId()
+    }));
+
+    // Actualizează allQuestionSets pentru titlul specificat
+    userItem.questionSets[questionSetIndex].allQuestionSets = updatedInputData;
 
     await userItem.save();
 
@@ -135,7 +145,6 @@ app.post('/api/items/saveForUser', async (req, res) => {
   }
 });
 
-
 app.post('/api/items/signin', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -145,7 +154,6 @@ app.post('/api/items/signin', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Sign-in successful, return user information or token
     res.status(200).json({ user });
   } catch (error) {
     console.error('Error during sign-in:', error);
@@ -154,39 +162,38 @@ app.post('/api/items/signin', async (req, res) => {
 });
 
 app.post('/api/items/saveEdit', async (req, res) => {
-  const {_id, item, questionSetId, allQuestionId, state } = req.body;
-  const objectId = new ObjectId(_id);
-  const mainDocId = new mongoose.Types.ObjectId(_id);  // The ID of the main document
-  const questionSetIdd = new mongoose.Types.ObjectId(allQuestionId); // The ID of the question set
-  const allQuestionSetId = new mongoose.Types.ObjectId(questionSetId); // The ID of the specific allQuestionSet
+  const { _id, item, questionSetId, allQuestionId, state } = req.body;
 
-  let result;
   try {
-    
-    if(!state){
-      const result = await Item.updateOne(
+    const mainDocId = new ObjectId(_id);
+    const questionSetObjectId = new ObjectId(questionSetId);
+    const allQuestionSetObjectId = new ObjectId(allQuestionId);
+
+    let result;
+    if (!state) {
+      result = await Item.updateOne(
         { "_id": mainDocId },
         { $set: { "questionSets.$[qs].allQuestionSets.$[aqs].questions": item } },
         {
           arrayFilters: [
-            { "qs._id": questionSetIdd },
-            { "aqs._id": allQuestionSetId }
+            { "qs._id": questionSetObjectId },
+            { "aqs._id": allQuestionSetObjectId }
           ]
         }
       );
-    }else{
-      const result = await Item.updateOne(
+    } else {
+      result = await Item.updateOne(
         { "_id": mainDocId },
         { $set: { "questionSets.$[qs].allQuestionSets.$[aqs].answers": item } },
         {
           arrayFilters: [
-            { "qs._id": questionSetIdd },
-            { "aqs._id": allQuestionSetId }
+            { "qs._id": questionSetObjectId },
+            { "aqs._id": allQuestionSetObjectId }
           ]
         }
       );
     }
-    
+
     res.status(200).send({ message: 'all good' });
   } catch (error) {
     console.error(error);
@@ -207,18 +214,15 @@ app.delete('/api/items/admin/:id', async (req, res) => {
   }
 });
 
-
-
-
 app.post('/api/items/signup', async (req, res) => {
   const { username, password } = req.body;
   try {
     const addUser = await Item.create({
-      username:username,
-      password:password,
-      role:"user",
-      questionSets:[]
-    })
+      username: username,
+      password: password,
+      role: "user",
+      questionSets: []
+    });
     res.status(200).json({ username });
   } catch (error) {
     console.error('Error during sign-up:', error);
@@ -226,10 +230,7 @@ app.post('/api/items/signup', async (req, res) => {
   }
 });
 
-
-
 const PORT = process.env.PORT || 3000; // Use the provided port or default to 3000
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
-
