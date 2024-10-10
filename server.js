@@ -165,40 +165,71 @@ app.post('/api/items/saveEdit', async (req, res) => {
   const { _id, item, questionSetId, allQuestionId, state } = req.body;
 
   try {
+    // Log the incoming IDs for verification
+    console.log("Received IDs:", { _id, questionSetId, allQuestionId });
+  
     const mainDocId = new ObjectId(_id);
     const questionSetObjectId = new ObjectId(questionSetId);
     const allQuestionSetObjectId = new ObjectId(allQuestionId);
-
+  
+    // Log the converted ObjectIds
+    console.log("Converted ObjectIds:", { mainDocId, questionSetObjectId, allQuestionSetObjectId });
+  
     let result;
     if (!state) {
+      // Log which field is being updated (questions in this case)
+      console.log("Updating questions with item:", item);
+  
       result = await Item.updateOne(
         { "_id": mainDocId },
         { $set: { "questionSets.$[qs].allQuestionSets.$[aqs].questions": item } },
         {
           arrayFilters: [
-            { "qs._id": questionSetObjectId },
-            { "aqs._id": allQuestionSetObjectId }
+            { "qs._id": allQuestionSetObjectId },
+            { "aqs._id": questionSetObjectId }
           ]
         }
       );
     } else {
+      // Log which field is being updated (answers in this case)
+      console.log("Updating answers with item:", item);
+  
       result = await Item.updateOne(
         { "_id": mainDocId },
         { $set: { "questionSets.$[qs].allQuestionSets.$[aqs].answers": item } },
         {
           arrayFilters: [
-            { "qs._id": questionSetObjectId },
-            { "aqs._id": allQuestionSetObjectId }
+            { "qs._id": allQuestionSetObjectId },
+            { "aqs._id": questionSetObjectId }
           ]
         }
       );
     }
-
+  
+    // Log the result of the update operation
+    console.log("Update operation result:", result);
+  
+    if (result.matchedCount === 0) {
+      console.warn("No documents matched the query criteria.");
+    }
+  
+    if (result.modifiedCount === 0) {
+      console.warn("No documents were modified.");
+    }
+  
+    // Log the specific path you're trying to update (for clarity in debugging)
+    console.log("Updated path: questionSets.$[qs].allQuestionSets.$[aqs]", { state });
+  
+    // Send success response
     res.status(200).send({ message: 'all good' });
   } catch (error) {
-    console.error(error);
+    // Log the error details
+    console.error("An error occurred during the update operation:", error);
+  
+    // Send error response
     res.status(500).send({ message: 'An error occurred during the database operation', error: error.message });
   }
+  
 });
 
 app.delete('/api/items/admin/:id', async (req, res) => {
