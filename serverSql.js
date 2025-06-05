@@ -79,44 +79,40 @@ app.post('/api/items/question-set', async (req, res) => {
 });
 
 app.post('/api/items/saveForUser', async (req, res) => {
-    const { inputData, questionSetId, userId } = req.body;
-  
-    if (!userId) {
-      return res.status(400).send('Invalid user.');
-    }
-  
-    const connection = await conn.getConnection();
-  
-    try {
-      await connection.beginTransaction(); 
-  
-      // Delete old questions
-      await connection.execute(
-        "DELETE FROM questions WHERE questionSetId = ?",
-        [questionSetId]
+  const { inputData, questionSetId, userId } = req.body;
+
+  if (!userId || !questionSetId || !Array.isArray(inputData)) {
+    return res.status(400).send("Invalid data.");
+  }
+
+  const connection = await conn.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    await connection.execute("DELETE FROM questions WHERE questionSetId = ?", [questionSetId]);
+
+    if (inputData.length > 0) {
+      const values = inputData.map(item => [questionSetId, item.questionText, item.answerText]);
+      await connection.query(
+        "INSERT INTO questions (questionSetId, questionText, answerText) VALUES ?",
+        [values]
       );
-  
-      // Insert new questions
-      const insertPromises = inputData.map(item => {
-        return connection.execute(
-          "INSERT INTO questions (questionSetId, questionText, answerText) VALUES (?, ?, ?)",
-          [questionSetId, item.questionText, item.answerText]
-        );
-      });
-  
-      await Promise.all(insertPromises);
-  
-      const [newRows] = await conn.execute("SELECT * FROM questions WHERE questionSetId = ?", [questionSetId]); 
-      await connection.commit();
-      res.status(200).json(newRows);
-    } catch (error) {
-      await connection.rollback(); 
-      console.error('SQL Error:', error.message);
-      return res.status(500).send('Error saving data.');
-    } finally {
-      connection.release(); 
     }
+
+    const [newRows] = await connection.execute("SELECT * FROM questions WHERE questionSetId = ?", [questionSetId]);
+
+    await connection.commit();
+    res.status(200).json(newRows);
+  } catch (error) {
+    await connection.rollback();
+    console.error("SQL Error:", error.message);
+    res.status(500).send("Error saving data.");
+  } finally {
+    connection.release();
+  }
 });
+
   
 
 app.post('/api/items/signin', async (req, res) => {
