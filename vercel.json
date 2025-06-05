@@ -3,14 +3,14 @@
     "name": "server-quizlet",
     "builds":[
         {
-            "src": "server.js",
+            "src": "serverSql.js",
             "use": "@vercel/node"
         }
     ],
     "routes": [
         {
             "src": "/(.*)",
-            "dest":"/server.js"
+            "dest":"/serverSql.js"
         }
     ]
 }
