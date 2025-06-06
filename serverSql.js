@@ -78,6 +78,23 @@ app.post('/api/items/question-set', async (req, res) => {
   
 });
 
+app.post('/api/items/editTitle', async(req, res) =>{
+    const {questionSetId, title} = req.body;
+
+    if(!questionSetId || !title){
+      console.log(questionSetId, title);
+      return res.status(400).send("Question set Id or title not found");
+    }
+
+    try{
+      await conn.execute("UPDATE questionSets SET title = ? WHERE questionSetId = ?", [title, questionSetId]);
+      res.status(200).send("Title updated succesfully");
+    }catch(e){
+      console.error(e);
+      res.status(500).send("Title did not save, error");
+    }
+})
+
 app.post('/api/items/saveForUser', async (req, res) => {
   const { inputData, questionSetId, userId } = req.body;
 
