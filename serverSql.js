@@ -3,7 +3,24 @@ const cors = require('cors');
 const app = express();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+const secret = process.env.JWT_SECRET;
+
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) return res.status(401).send('No token provided');
+
+  const token = authHeader.split(' ')[1];
+  jwt.verify(token, secret, (err, decoded) => {
+    if (err) return res.status(403).send('Invalid token');
+
+    req.user = decoded;
+    next();
+  });
+};
 
 app.use(cors({
   origin: '*',
@@ -18,7 +35,11 @@ const conn = mysql.createPool({
     database: process.env.SQL_DATABASE,
 });
 
-app.get('/api/items/getUser', async (req, res) => {
+app.get('/api/items/getUser', authenticate,  async (req, res) => {
+  const role = req.user.role;
+  if(role!="admin"){
+    return res.status(504).json({error: "No admin!"});
+  }
   try {
     const [users] = await conn.execute("SELECT * FROM users")
     res.status(200).json(users);
@@ -28,8 +49,9 @@ app.get('/api/items/getUser', async (req, res) => {
   }
 });
 
-app.get('/api/items', async (req, res) => {
-    const { userId } = req.query;
+app.get('/api/items', authenticate, async (req, res) => {
+    const userId  = req.user.userId;
+    console.log(userId);
   
     try {
       // Get all question sets for this user
@@ -46,7 +68,7 @@ app.get('/api/items', async (req, res) => {
 });
   
 
-app.post('/api/items/deleteQuestionSet', async (req, res) => {
+app.post('/api/items/deleteQuestionSet', authenticate, async (req, res) => {
   const { questionSetId } = req.body;
 
   try {
@@ -66,8 +88,9 @@ app.post('/api/items/deleteQuestionSet', async (req, res) => {
   }
 });
 
-app.post('/api/items/question-set', async (req, res) => {
-  const { userId, title } = req.body;
+app.post('/api/items/question-set', authenticate, async (req, res) => {
+  const userId = req.user.userId;
+  const { title } = req.body;
     
     try{
         const [insertRows] = await conn.execute("INSERT INTO questionSets (userId, title) VALUES (?, ?)", [userId, title]);
@@ -78,7 +101,12 @@ app.post('/api/items/question-set', async (req, res) => {
   
 });
 
-app.post('/api/items/editTitle', async(req, res) =>{
+app.get('/api/items/getRole', authenticate, async(req, res) =>{
+  const role = req.user.role;
+  return res.status(200).send({role: role});
+})
+
+app.post('/api/items/editTitle', authenticate,  async(req, res) =>{
     const {questionSetId, title} = req.body;
 
     if(!questionSetId || !title){
@@ -95,8 +123,9 @@ app.post('/api/items/editTitle', async(req, res) =>{
     }
 })
 
-app.post('/api/items/saveForUser', async (req, res) => {
-  const { inputData, questionSetId, userId } = req.body;
+app.post('/api/items/saveForUser', authenticate, async (req, res) => {
+  const userId = req.user.userId;
+  const { inputData, questionSetId } = req.body;
 
   if (!userId || !questionSetId || !Array.isArray(inputData)) {
     return res.status(400).send("Invalid data.");
@@ -150,15 +179,17 @@ app.post('/api/items/signin', async (req, res) => {
     return res.status(401).json({ error: `Invalid credentials password${isPasswordValid}`});
     }
 
-    res.status(200).json({ userId, role, username });
+    const token = jwt.sign({userId: userId, role:role}, secret, {expiresIn: '2h'})
+    res.status(200).json({token});
   } catch (error) {
     console.error('Error during sign-in:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
-app.post('/api/items/saveEdit', async (req, res) => {
-  const { userId, item, questionId, state } = req.body;
+app.post('/api/items/saveEdit', authenticate, async (req, res) => {
+  const userId = req.user.userId
+  const { item, questionId, state } = req.body;
 
   try {
     // Log the incoming IDs for verification
@@ -192,11 +223,16 @@ app.post('/api/items/saveEdit', async (req, res) => {
 
 });
 
-app.delete('/api/items/admin/:id', async (req, res) => {
+app.delete('/api/items/admin/:id', authenticate, async (req, res) => {
   try {
     const userId = req.params.id;
+    const role = req.user.role;
+    //const userId = req.params.id;
     if(!userId){
         console.error("no user id");
+    }
+    if(role!="admin"){
+        return res.status(504).json({error: "No admin!"});
     }
     const [rows] = await conn.execute("DELETE FROM users WHERE userId = ?", [userId]);
     if (rows.affectedRows===0) {
@@ -222,7 +258,7 @@ app.post('/api/items/signup', async (req, res) => {
   }
 });
 
-app.get('/api/items/retreiveQuestions', async(req,res) => {
+app.get('/api/items/retreiveQuestions', authenticate, async(req,res) => {
     const {questionSetId} = req.query;
     try{
         const [rows] = await conn.execute("SELECT * FROM questions WHERE questionSetId = ?", [questionSetId]);
