@@ -9,7 +9,11 @@ require('dotenv').config();
 const secret = process.env.JWT_SECRET;
 
 const authenticate = (req, res, next) => {
+  console.log('Entered authenticate');
+  console.log("Authorization Header:", req.headers.authorization);
+
   const authHeader = req.headers.authorization;
+  console.log("Authorization Header:", authHeader);
 
   if (!authHeader) return res.status(401).send('No token provided');
 
