@@ -233,7 +233,7 @@ app.post('/api/items/signin', async (req, res) => {
     return res.status(401).json({ error: `Invalid credentials password${isPasswordValid}`});
     }
 
-    const token = jwt.sign({userId: userId, role:role}, secret, {expiresIn: 60})
+    const token = jwt.sign({userId: userId, role:role}, secret, {expiresIn: '23h'})
     res.status(200).json({token});
   } catch (error) {
     console.error('Error during sign-in:', error);
