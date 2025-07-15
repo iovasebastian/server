@@ -4,9 +4,15 @@ const app = express();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { createWorker } = require('tesseract.js');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const { generateQAFromText } = require('./gemeni.js');
 require('dotenv').config();
 
 const secret = process.env.JWT_SECRET;
+const upload = multer({ dest: 'uploads/' });
 
 const authenticate = (req, res, next) => {
   console.log('Entered authenticate');
@@ -38,6 +44,62 @@ const conn = mysql.createPool({
     password: process.env.SQL_PASSWORD,
     database: process.env.SQL_DATABASE,
 });
+
+app.post('/api/items/ocr-file', authenticate ,upload.single('image'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Image file is required' });
+    const imagePath = path.resolve(req.file.path);
+    const numberOfQuestions = req.body.numberOfQuestions;
+    console.log(numberOfQuestions);
+    let worker;
+    try {
+      worker = await createWorker('eng');
+      const result = await worker.recognize(imagePath);
+      const extractedText = result.data.text;
+
+      try {
+        fs.unlinkSync(imagePath);
+      } catch (unlinkErr) {
+        console.warn('Failed to delete file:', unlinkErr.message);
+      }
+
+      const qa = await generateQAFromText(extractedText, numberOfQuestions);
+      res.json({ extractedText, questionsAndAnswers: qa });
+    } catch (error) {
+      console.error('OCR or Gemini error:', error);
+      try {
+        fs.unlinkSync(imagePath);
+      } catch (unlinkErr) {
+        console.warn('Failed to delete file:', unlinkErr.message);
+      }
+      res.status(500).json({ error: 'Failed to process image or generate questions' });
+    } finally {
+      if (worker) {
+        await worker.terminate();
+      }
+    }
+});
+
+app.post('/api/items/ocr-upload', authenticate, async (req, res) => {
+  const { qaPairs, questionSetId } = req.body;
+
+  if (!Array.isArray(qaPairs) || !questionSetId) {
+    return res.status(400).json({ message: "Missing or invalid data" });
+  }
+
+  try {
+    const values = qaPairs.map(q => [questionSetId, q.question, q.answer]);
+    await conn.query(
+     "INSERT INTO questions (questionSetId, questionText, answerText) VALUES ?",
+      [values]
+    );
+
+    res.status(200).json({ message: "Items uploaded to DB" });
+  } catch (e) {
+    console.error("Upload error:", e.message);
+    res.status(500).json({ message: `Error uploading items: ${e.message}` });
+  }
+});
+
 
 app.get('/api/items/getUser', authenticate,  async (req, res) => {
   const role = req.user.role;
@@ -183,7 +245,7 @@ app.post('/api/items/signin', async (req, res) => {
     return res.status(401).json({ error: `Invalid credentials password${isPasswordValid}`});
     }
 
-    const token = jwt.sign({userId: userId, role:role}, secret, {expiresIn: '23h'})
+    const token = jwt.sign({userId: userId, role:role}, secret, {expiresIn: 60})
     res.status(200).json({token});
   } catch (error) {
     console.error('Error during sign-in:', error);
