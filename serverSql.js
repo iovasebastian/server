@@ -4,7 +4,7 @@ const app = express();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { createWorker } = require('@tesseract.js/node');
+const { createWorker } = require('tesseract.js');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -62,7 +62,16 @@ app.post('/api/items/ocr-file', authenticate ,upload.single('image'), async (req
     console.log(numberOfQuestions);
     let worker;
     try {
-      worker = await createWorker('eng');
+      worker = await createWorker({
+        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+        corePath: 'https://unpkg.com/tesseract.js-core@2.1.0/tesseract-core.wasm.js',
+        workerPath: 'https://unpkg.com/tesseract.js@2.1.5/dist/worker.min.js',
+        logger: m => console.log(m),
+      });
+      await worker.load();              
+      await worker.loadLanguage('eng');  
+      await worker.initialize('eng'); 
+
       const result = await worker.recognize(imagePath);
       const extractedText = result.data.text;
 
