@@ -55,46 +55,15 @@ const conn = mysql.createPool({
     database: process.env.SQL_DATABASE,
 });
 
-app.post('/api/items/ocr-file', authenticate ,upload.single('image'), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'Image file is required' });
-    const imagePath = path.resolve(req.file.path);
-    const numberOfQuestions = req.body.numberOfQuestions;
-    console.log(numberOfQuestions);
-    let worker;
+app.post('/api/items/gemini', authenticate, async (req, res) => {
+    const { text, numberOfQuestions } = req.body;
+    if (!text) return res.status(400).json({ error: 'Text is required' });
     try {
-      worker = await createWorker({
-        langPath: 'https://tessdata.projectnaptha.com/4.0.0',
-        corePath: 'https://unpkg.com/tesseract.js-core@2.1.0/tesseract-core.wasm.js',
-        workerPath: 'https://unpkg.com/tesseract.js@2.1.5/dist/worker.min.js',
-        logger: m => console.log(m),
-      });
-      await worker.load();              
-      await worker.loadLanguage('eng');  
-      await worker.initialize('eng'); 
-
-      const result = await worker.recognize(imagePath);
-      const extractedText = result.data.text;
-
-      try {
-        fs.unlinkSync(imagePath);
-      } catch (unlinkErr) {
-        console.warn('Failed to delete file:', unlinkErr.message);
-      }
-
-      const qa = await generateQAFromText(extractedText, numberOfQuestions);
-      res.json({ extractedText, questionsAndAnswers: qa });
-    } catch (error) {
-      console.error('OCR or Gemini error:', error);
-      try {
-        fs.unlinkSync(imagePath);
-      } catch (unlinkErr) {
-        console.warn('Failed to delete file:', unlinkErr.message);
-      }
-      res.status(500).json({ error: 'Failed to process image or generate questions' });
-    } finally {
-      if (worker) {
-        await worker.terminate();
-      }
+      const qa = await generateQAFromText(text, numberOfQuestions); // your Gemini logic
+      res.json({ questionsAndAnswers: qa });
+    } catch (err) {
+      console.error('Gemini generation error:', err);
+      res.status(500).json({ error: 'Failed to generate questions' });
     }
 });
 
