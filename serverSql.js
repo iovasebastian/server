@@ -4,7 +4,7 @@ const app = express();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { createWorker } = require('tesseract.js');
+const { createWorker } = require('@tesseract.js/node');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -14,7 +14,7 @@ require('dotenv').config();
 const secret = process.env.JWT_SECRET;
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, '/tmp'); // ✅ only writable folder in serverless
+    cb(null, '/tmp'); 
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
