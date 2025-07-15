@@ -12,7 +12,17 @@ const { generateQAFromText } = require('./gemeni.js');
 require('dotenv').config();
 
 const secret = process.env.JWT_SECRET;
-const upload = multer({ dest: 'uploads/' });
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, '/tmp'); // ✅ only writable folder in serverless
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'upload-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage: storage });
 
 const authenticate = (req, res, next) => {
   console.log('Entered authenticate');
