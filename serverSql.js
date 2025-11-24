@@ -7,10 +7,12 @@ const jwt = require('jsonwebtoken');
 const { createWorker } = require('tesseract.js');
 const path = require('path');
 const fs = require('fs');
+const Stripe = require('stripe');
 const multer = require('multer');
 const { generateQAFromText } = require('./gemeni.js');
 const { createCodeForPasswordReset, sendMail } = require('./nodeMailer.js');
 require('dotenv').config();
+const stripe = new Stripe(process.env.STRIPE_API);
 
 const secret = process.env.JWT_SECRET;
 const storage = multer.diskStorage({
@@ -47,15 +49,96 @@ app.use(cors({
   origin: '*',
   credentials: true,
 }));
-app.use(express.json({limit: '1mb'}));
+
 
 const conn = mysql.createPool({
-    host: process.env.SQL_HOST,
+    host: process.env.SQL_HOST_LOCAL, //change SQL_HOST_LOCAL to SQL_HOST 
     user: process.env.SQL_USER,
     password: process.env.SQL_PASSWORD,
     database: process.env.SQL_DATABASE,
+    port: process.env.DB_PORT
 });
 
+app.post(
+  '/webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.LOCALHOST_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error('❌ Webhook signature verification failed.', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      // Idempotency guard: ensure we process each event only once (pseudo)
+      // await ensureNotProcessed(event.id);
+
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object;
+
+          // Option A: For Checkout, this is the primary success signal.
+          // session.payment_status === 'paid' means funds are captured (for one-time).
+          if (session.payment_status === 'paid') {
+            // pull your metadata
+            const { product } = session.metadata || {};
+
+            // (optional) fetch line items / price data if needed
+            // const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+
+            // ✅ Update your DB (grant access, mark order as paid, etc.)
+            // await grantAccessOrMarkOrderPaid({ userId, productId, sessionId: session.id });
+
+            console.log('✅ Order fulfilled for session:', session.id);
+            console.log('session.completed');
+          }
+          break;
+        }
+
+        case 'payment_intent.succeeded': {
+          // Option B: If you use Elements or care about PI events directly
+          const pi = event.data.object;
+          console.log('session.intent.succeeded');
+          // ✅ update DB based on pi.id / pi.metadata, etc.
+          break;
+        }
+
+        case 'charge.refunded':
+          console.log('refund');
+        case 'charge.dispute.created': {
+          // Handle refunds/disputes if you need to revert access
+          break;
+        }
+
+        default:
+          console.log('default');
+          break;
+      }
+
+      // await markProcessed(event.id); // idempotency bookkeeping
+      res.json({ received: true });
+    } catch (err) {
+      console.error('❌ Webhook handler error:', err);
+      // 2xx tells Stripe “we got it”; 5xx forces a retry (Stripe will retry automatically)
+      res.status(500).send('Webhook handler failed');
+    }
+  }
+);
+
+// IMPORTANT: Put this AFTER the webhook route
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Server error' });
+});
+app.use(express.json({limit: '1mb'}));
 app.post('/api/items/gemini', authenticate, async (req, res) => {
     const { text, numberOfQuestions } = req.body;
     if (!text) return res.status(400).json({ error: 'Text is required' });
@@ -102,7 +185,7 @@ app.get('/api/items/getTotalSets', authenticate, async (req, res) => {
       const [rows] = await conn.execute("SELECT * FROM questionSets WHERE userId = ?", [userId]);
       const numberOfRows = rows.length;
       console.log(numberOfRows);
-      res.status(200).json({setNumber: numberOfRows});
+      res.status(200).json({setNumber: numberOfRows, sets:rows});
     } catch (err) {
       res.status(500).json({ error: 'Failed to get number of Rows' });
       console.error(err);
@@ -315,7 +398,41 @@ app.get('/api/items', authenticate, async (req, res) => {
     try {
       // Get all question sets for this user
       const [questionSets] = await conn.execute(
-        'SELECT * FROM questionSets WHERE userId = ?',
+        'SELECT * FROM questionSets WHERE userId = ? AND public = 0',
+        [userId]
+      );
+  
+      res.status(200).json(questionSets);
+    } catch (error) {
+      console.error('Error fetching items:', error.message);
+      res.status(500).json({ error: 'Error getting items from DB' });
+    }
+});
+
+app.get('/api/items/public', authenticate, async (req, res) => {
+    const userId  = req.user.userId;
+    console.log(userId);
+  
+    try {
+      // Get all question sets for this user
+      const [questionSets] = await conn.execute(`SELECT * FROM questionSets WHERE userId = ? AND public = TRUE AND visibility = 'visible'`,
+        [userId]
+      );
+  
+      res.status(200).json(questionSets);
+    } catch (error) {
+      console.error('Error fetching items:', error.message);
+      res.status(500).json({ error: 'Error getting items from DB' });
+    }
+});
+
+app.get('/api/items/getManageSets', authenticate, async (req, res) => {
+    const userId  = req.user.userId;
+    console.log(userId);
+  
+    try {
+      // Get all question sets for this user
+      const [questionSets] = await conn.execute(`SELECT * FROM publicSets WHERE ownerId = ?`,
         [userId]
       );
   
@@ -347,10 +464,50 @@ app.post('/api/items/deleteQuestionSet', authenticate, async (req, res) => {
   }
 });
 
+app.post('/api/items/deleteQuestionSetBaught', authenticate, async (req, res) => {
+  const { questionSetId } = req.body;
+
+  try {
+    const [result] = await conn.execute(
+        "UPDATE questionSets SET visibility = 'deleted' WHERE questionSetId = ?",
+        [questionSetId]
+    );
+    
+    if (result.affectedRows === 0) {
+    return res.status(404).send('Question set not found');
+    }
+
+    res.send('Question set deleted successfully');
+  } catch (error) {
+    console.log(error);
+    res.status(500).send('Error deleting question set: ' + error.message);
+  }
+});
+
+app.post('/api/items/deleteQuestionFromPublic', authenticate, async (req, res) => {
+  const { questionSetId } = req.body;
+
+  try {
+    const [result] = await conn.execute(
+        "DELETE FROM publicSets WHERE publicSetId = ?",
+        [questionSetId]
+    );
+    
+    if (result.affectedRows === 0) {
+    return res.status(404).send('Question set not found');
+    }
+
+    res.send('Question set deleted successfully');
+  } catch (error) {
+    console.log(error);
+    res.status(500).send('Error deleting question set: ' + error.message);
+  }
+});
+
+
 app.post('/api/items/question-set', authenticate, async (req, res) => {
   const userId = req.user.userId;
   const { title } = req.body;
-    
     try{
         const [insertRows] = await conn.execute("INSERT INTO questionSets (userId, title) VALUES (?, ?)", [userId, title]);
         return res.status(200).send('Empty question set added successfully');
@@ -359,6 +516,127 @@ app.post('/api/items/question-set', authenticate, async (req, res) => {
     }
   
 });
+
+app.post('/api/items/restorePurcheases', authenticate, async (req, res) => {
+  const userId = req.user.userId;
+    try{
+        const [rows] = await conn.execute(`UPDATE questionSets SET visibility = 'visible' WHERE visibility = 'deleted' AND userId = ?`, [userId]);
+        return res.status(200).send('Purcheases restored sucessfully');
+    }catch(e){
+        console.error(e);
+        return res.status(500).send("Purcheases could not be restored");  
+    }
+  
+});
+
+app.post('/api/items/getPublicSet', authenticate, async (req, res) => {
+  const userId = req.user.userId;
+  const { publicSetId, title } = req.body;
+    try{
+        const [insertion] = await conn.execute("INSERT INTO questionSets (userId, title, public, publicSetId, visibility) VALUES (?, ?, 1, ?, 'visible')", [userId, title, publicSetId]);
+        let intertedId = insertion.insertId;
+
+        await conn.execute(
+          `INSERT INTO questions (questionSetId, questionText, answerText)
+          SELECT ?, pq.questionText, pq.answerText
+          FROM publicSetsQuestions pq
+          WHERE pq.publicSetId = ?`,
+          [intertedId, publicSetId]
+        );
+        return res.status(200).send('Question sets migrated succesfully');
+    }catch(e){
+        return res.status(500).send("Error adding the new questionSet");
+    }
+  
+});
+
+app.post('/api/items/uploadPublicSet', authenticate, async (req, res) => {
+  const userId = req.user.userId;
+  const { questionSetId, price, subject, difficulty } = req.body;
+
+  // Use the same connection for the whole transaction (works with pool or single conn)
+  const db = conn.getConnection ? await conn.getConnection() : conn;
+
+  try {
+    // 0) Read title and item count (safer COUNT(*) instead of SELECT *)
+    const [[titleRow]] = await db.execute(
+      "SELECT title FROM questionSets WHERE questionSetId = ?",
+      [questionSetId]
+    );
+    if (!titleRow) {
+      return res.status(404).send("Original question set not found");
+    }
+    const title = titleRow.title;
+
+    const [[cntRow]] = await db.execute(
+      "SELECT COUNT(*) AS cnt FROM questions WHERE questionSetId = ?",
+      [questionSetId]
+    );
+    const itemNumber = cntRow.cnt || 0;
+
+    // 1) Start txn
+    await db.beginTransaction();
+
+    // 2) Insert parent public set
+    //PRICE SET TO 0 NOW CHANCE TO "price" WHEN READY
+    const [ins] = await db.execute(
+      `INSERT INTO publicSets
+       (ownerId, title, price, subject, difficulty, itemNumber, originalSetId)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [userId, title, 0, subject, difficulty, itemNumber, questionSetId]
+    );
+    const publicSetId = ins.insertId;
+
+    // 3) Copy all questions from original → publicSetsQuestions with FK = publicSetId
+    // TODO: adjust the target column list to match your table (e.g., add/remove explanation/options/etc.)
+    await db.execute(
+      `INSERT INTO publicSetsQuestions
+         (publicSetId, questionText, answerText)
+       SELECT
+         ?, q.questionText, q.answerText
+       FROM questions q
+       WHERE q.questionSetId = ?`,
+      [publicSetId, questionSetId]
+    );
+
+    // 4) Commit
+    await db.commit();
+
+    return res.status(200).json({
+      message: "Question set published successfully",
+      publicSetId,
+      itemNumber
+    });
+  } catch (e) {
+    try { await db.rollback(); } catch {}
+    console.error(e);
+    return res.status(500).send(`Error publishing question set: ${e.message || e}`);
+  } finally {
+    if (db.release) db.release();
+  }
+});
+
+
+app.get('/api/items/getPublicSets', authenticate, async (req, res) => {
+  try{
+    const [rows] = await conn.execute("SELECT * FROM publicSets");
+    return res.status(200).send({questionSets: rows});
+  }catch(error){
+    console.error(error);
+    return res.status(500).send("Error getting questionSets");
+  }
+})
+
+app.get('/api/items/getPublicSetPreview', authenticate, async (req, res) => {
+  try{
+    const setId = req.query.setId;
+    const [rows] = await conn.execute("SELECT * FROM publicSetsQuestions WHERE publicSetId = ? LIMIT 10", [setId]);
+    return res.status(200).send({questions: rows});
+  }catch(error){
+    console.error(error);
+    return res.status(500).send("Error getting questionSets");
+  }
+})
 
 app.post('/api/items/addKnowledge', authenticate, async (req, res) => {
   const userId = req.user.userId;
@@ -564,6 +842,48 @@ app.get('/api/items/retreiveQuestions', authenticate, async(req,res) => {
         console.error(e);
     }
 });
+
+//STRIPE
+app.post('/api/items/create-checkout-session', async (req, res) => {
+  try {
+    const { setId } = req.body;
+    let product;
+    let currency = "eur";
+    try{
+      const row = await conn.execute("SELECT * FROM publicSets WHERE publicSetId = ?", [setId]);
+      product = row;
+      console.log('product', product);
+    }catch(e){
+      console.error(e);
+    }
+
+    if (!product) return res.status(400).json({ error: 'Invalid product' });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            unit_amount: 100,
+            product_data: { name: 'Test Product' },
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `http://localhost:3001/#/marketplace/success`,
+      cancel_url: `http://localhost:3001/#/marketplace/cancel`,
+      // Attach metadata you need in the webhook:
+      metadata: { productSetId: product.productSetId },
+    });
+      res.json({ url: session.url });
+  } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 const PORT = process.env.PORT || 3000; // Use the provided port or default to 3000
 app.listen(PORT, () => {
