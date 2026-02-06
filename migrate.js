@@ -51,7 +51,7 @@ const OldSchema = new mongoose.Schema({
 
 const Item = mongoose.model('Item', ItemSchema, 'test');
 const Old = mongoose.model('OldItem', OldSchema, 'items');
-Old.findOne({ username: 'alexandra' })
+Old.findOne({ username: 'nunutza' })
   .then(userDoc => {
     
     // Transform the old userDoc to fit the new schema
