@@ -3,6 +3,7 @@ const conn = require('../config/db');
 const stripe = require('../config/stripe');
 const authenticate = require('../middleware/auth');
 
+
 const router = express.Router();
 
 router.post('/api/items/create-checkout-session', authenticate, async (req, res) => {
@@ -61,9 +62,9 @@ router.post('/api/items/create-checkout-session', authenticate, async (req, res)
         payment_intent_data: {
           application_fee_amount: platformFee,
         },
-
-        success_url: `http://localhost:3001/#/marketplace/success`,
-        cancel_url: `http://localhost:3001/#/marketplace/cancel`,
+        
+        success_url: `https://quizlet-app-sooty.vercel.app/#/marketplace/success`,
+        cancel_url: `https://quizlet-app-sooty.vercel.app/#/marketplace/success`,
         metadata: {   
           publicSetId: String(setId),
           buyerUserId: String(buyerUserId),
@@ -141,8 +142,8 @@ router.post("/api/items/startStripeOnboarding", authenticate, async (req, res) =
 
     const accountLink = await stripe.accountLinks.create({
       account: stripeId,
-      refresh_url: "http://localhost:3001/#/profile?onboarding=refresh",
-      return_url: "http://localhost:3001/#/profile?onboarding=return",
+      refresh_url: "https://quizlet-app-sooty.vercel.app/#/profile?onboarding=refresh",
+      return_url: "https://quizlet-app-sooty.vercel.app/#/profile?onboarding=return",
       type: "account_onboarding",
     });
 
