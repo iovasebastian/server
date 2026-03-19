@@ -11,6 +11,11 @@ router.post('/api/items/signin', async (req, res) => {
 
   try {
     const [rows] = await conn.execute("SELECT * FROM users WHERE email = ?", [email]);
+    
+    if (!rows.length){
+      return res.status(401).json({error: 'Invalid credentials'})
+    }
+
     const userId = rows[0].userId;
     const passwordFetched = rows[0].password;
     const role = rows[0].role;
@@ -21,14 +26,14 @@ router.post('/api/items/signin', async (req, res) => {
       
     const isPasswordValid = await bcrypt.compare(password, passwordFetched);
     if (!isPasswordValid) {
-    return res.status(401).json({ error: `Invalid credentials password${isPasswordValid}`});
+      return res.status(401).json({ error: `Invalid credentials password${isPasswordValid}`});
     }
 
     const token = jwt.sign({userId: userId, role:role}, secret, {expiresIn: '23h'})
     res.status(200).json({token});
   } catch (error) {
     console.error('Error during sign-in:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ error: 'Network error, please check your internet connection!' });
   }
 });
 
