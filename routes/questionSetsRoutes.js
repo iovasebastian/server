@@ -6,7 +6,6 @@ const router = express.Router();
 
 router.get('/api/items', authenticate, async (req, res) => {
     const userId  = req.user.userId;
-    console.log(userId);
   
     try {
       // Get all question sets for this user
@@ -60,7 +59,6 @@ router.post('/api/items/deleteQuestionSet', authenticate, async (req, res) => {
 
     res.send('Question set deleted successfully');
   } catch (error) {
-    console.log(error);
     res.status(500).send('Error deleting question set: ' + error.message);
   }
 });
@@ -106,19 +104,13 @@ router.post('/api/items/saveEdit', authenticate, async (req, res) => {
   const { item, questionId, state } = req.body;
 
   try {
-    // Log the incoming IDs for verification
-    console.log("Received IDs:", { userId, questionId });
 
     if (!state) {
-      // Log which field is being updated (questions in this case)
-      console.log("Updating questions with item:", item);
       const [result] = await conn.execute(
         "UPDATE questions SET questionText = ? WHERE questionId = ?",
         [item, questionId]
       );
     } else {
-      // Log which field is being updated (answers in this case)
-      console.log("Updating answers with item:", item);
       const [result] = await conn.execute(
         "UPDATE questions SET answerText = ? WHERE questionId = ?",
         [item, questionId]
@@ -142,7 +134,6 @@ router.post('/api/items/editTitle', authenticate,  async(req, res) =>{
     const {questionSetId, title} = req.body;
 
     if(!questionSetId || !title){
-      console.log(questionSetId, title);
       return res.status(400).send("Question set Id or title not found");
     }
 
@@ -160,7 +151,6 @@ router.get('/api/items/getTotalSets', authenticate, async (req, res) => {
     try {
       const [rows] = await conn.execute("SELECT * FROM questionSets WHERE userId = ?", [userId]);
       const numberOfRows = rows.length;
-      console.log(numberOfRows);
       res.status(200).json({setNumber: numberOfRows, sets:rows});
     } catch (err) {
       res.status(500).json({ error: 'Failed to get number of Rows' });
@@ -170,7 +160,6 @@ router.get('/api/items/getTotalSets', authenticate, async (req, res) => {
 
 router.get('/api/items/getManageSets', authenticate, async (req, res) => {
     const userId  = req.user.userId;
-    console.log(userId);
   
     try {
       // Get all question sets for this user
@@ -200,7 +189,6 @@ router.post('/api/items/deleteQuestionSetBaught', authenticate, async (req, res)
 
     res.send('Question set deleted successfully');
   } catch (error) {
-    console.log(error);
     res.status(500).send('Error deleting question set: ' + error.message);
   }
 });
@@ -220,7 +208,6 @@ router.post('/api/items/deleteQuestionFromPublic', authenticate, async (req, res
 
     res.send('Question set deleted successfully');
   } catch (error) {
-    console.log(error);
     res.status(500).send('Error deleting question set: ' + error.message);
   }
 });
@@ -240,6 +227,18 @@ router.post('/api/items/restorePurcheases', authenticate, async (req, res) => {
 router.post('/api/items/getPublicSet', authenticate, async (req, res) => {
   const userId = req.user.userId;
   const { publicSetId, title } = req.body;
+    try{
+      const [publicSets] = await conn.execute("SELECT publicSetId FROM questionSets WHERE userId = ? AND publicSetId = ?", [userId, publicSetId])
+      const [privateSet] = await conn.execute("SELECT publicSetId FROM publicSets WHERE ownerId = ? AND publicSetId = ?", [userId, publicSetId])
+      console.log('publicSets', publicSets,publicSets.length)
+      console.log('privateSet', privateSet,privateSet.length)
+      if(publicSets.length || privateSet.length){
+        res.status(201).send("Question set alrady in user library")
+        return;
+      }
+    }catch(e){
+      res.status(500).send('Failed checking for duplicates')
+    }
     try{
         const [insertion] = await conn.execute("INSERT INTO questionSets (userId, title, public, publicSetId, visibility) VALUES (?, ?, 1, ?, 'visible')", [userId, title, publicSetId]);
         let intertedId = insertion.insertId;
@@ -365,7 +364,6 @@ router.post('/api/items/addKnowledge', authenticate, async (req, res) => {
 
 router.get('/api/items/public', authenticate, async (req, res) => {
     const userId  = req.user.userId;
-    console.log(userId);
   
     try {
       // Get all question sets for this user
