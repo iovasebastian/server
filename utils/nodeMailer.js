@@ -25,7 +25,9 @@ async function sendMail(receiverEmail, code) {
     };
 
     const result = await transport.sendMail(mailOptions);
+    console.log(result)
   } catch (error) {
+    console.error(error)
   }
 }
 

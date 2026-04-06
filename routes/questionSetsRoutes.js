@@ -75,8 +75,9 @@ router.post('/api/items/saveForUser', authenticate, async (req, res) => {
 
   try {
     await connection.beginTransaction();
-
+    const [beforeRows] = await connection.execute("SELECT COUNT(*) AS cnt FROM questions WHERE questionSetId = ?",[questionSetId]);
     await connection.execute("DELETE FROM questions WHERE questionSetId = ?", [questionSetId]);
+
 
     if (inputData.length > 0) {
       const values = inputData.map(item => [questionSetId, item.questionText, item.answerText]);
@@ -84,6 +85,19 @@ router.post('/api/items/saveForUser', authenticate, async (req, res) => {
         "INSERT INTO questions (questionSetId, questionText, answerText) VALUES ?",
         [values]
       );
+    }else{
+      await connection.execute(
+        `INSERT INTO logs 
+        (questionSetId, numberOfSaved, timeOfQuery, place, info) 
+        VALUES (?, ?, NOW(), ?, ?)`,
+        [
+          questionSetId,
+          0,
+          "inputData empty",
+          `rows before delete: ${beforeRows[0].cnt}`
+        ]
+      );
+
     }
 
     const [newRows] = await connection.execute("SELECT * FROM questions WHERE questionSetId = ?", [questionSetId]);
@@ -91,8 +105,24 @@ router.post('/api/items/saveForUser', authenticate, async (req, res) => {
     await connection.commit();
     res.status(200).json(newRows);
   } catch (error) {
-    await connection.rollback();
-    console.error("SQL Error:", error.message);
+    try {
+      await connection.rollback();
+      const [afterRollbackRows] = await connection.execute("SELECT COUNT(*) AS cnt FROM questions WHERE questionSetId = ?",[questionSetId]);
+      await connection.execute(
+        `INSERT INTO logs 
+        (questionSetId, numberOfSaved, timeOfQuery, place, info) 
+        VALUES (?, ?, NOW(), ?, ?)`,
+        [
+          questionSetId,
+          inputData.length,
+          "rollback",
+          `error: ${error.message} | rows before delete: ${beforeRows?.[0]?.cnt ?? "unknown"} | rows after rollback: ${afterRollbackRows[0].cnt}`
+        ]
+      );
+    } catch (rbError) {
+      console.error("Rollback failed:", rbError);
+    }
+    console.error("SQL Error:", error);
     res.status(500).send("Error saving data.");
   } finally {
     connection.release();
@@ -324,7 +354,17 @@ router.post('/api/items/uploadPublicSet', authenticate, async (req, res) => {
 
 router.get('/api/items/getPublicSets', authenticate, async (req, res) => {
   try{
-    const [rows] = await conn.execute("SELECT * FROM publicSets");
+    const [rows] = await conn.execute(`
+      SELECT 
+        ps.*,
+        ROUND(AVG(r.reviewRating), 1) AS avgRating,
+        COUNT(r.reviewRating) AS reviewCount
+      FROM publicSets ps
+      LEFT JOIN reviews r
+        ON ps.publicSetId = r.publicSetId
+      GROUP BY ps.publicSetId;
+    `);
+    
     return res.status(200).send({questionSets: rows});
   }catch(error){
     console.error(error);
@@ -377,5 +417,50 @@ router.get('/api/items/public', authenticate, async (req, res) => {
       res.status(500).json({ error: 'Error getting items from DB' });
     }
 });
+
+router.get('/api/items/checkUserReview', authenticate, async (req, res) =>{
+    const userId = req.user.userId;
+    const publicSetId = req.query.publicSetId;
+    if (!publicSetId){
+      return;
+    }
+    try{
+      const [review] = await conn.execute('SELECT * FROM reviews WHERE userId = ? AND publicSetId = ?',[userId, publicSetId]);
+      if(review.length !=0){
+        console.log('User already rated this questionSet')
+        res.status(200).json({userSentReview : true})
+      }else{
+        res.status(200).json({userSentReview : false})
+      }
+    }catch(error){
+      console.log(error)
+      res.status(500).json({error: 'Error extracting user data'});
+    }
+  })
+
+router.post('/api/items/sendReview', authenticate, async (req, res) =>{
+    const userId = req.user.userId;
+    const publicSetId = req.body.publicSetId;
+    const rating = req.body.rating;
+    try{
+      const [review] = await conn.execute('SELECT * FROM reviews WHERE userId = ? AND publicSetId = ?',[userId, publicSetId]);
+      if(review.length !=0){
+        console.log('User already rated this questionSet')
+        res.status(201).send('User already rated this question set');
+        return;
+      }
+    }catch(error){
+      console.log(error)
+      res.status(500).json({error: 'Error extracting user data'});
+      return;
+    }
+    try{
+      await conn.execute('INSERT INTO reviews (userId, publicSetId, reviewRating) VALUES (?, ?, ?)',[userId, publicSetId, rating]);
+      return res.status(200).send('Review added succesfully');
+    }catch(error){
+      console.log(error)
+      res.status(500).json({error : 'Error adding the review'});
+    }
+})
 
 module.exports = router;
